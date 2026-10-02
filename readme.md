@@ -232,9 +232,16 @@ konteks tanpa membaca file.
 Butuh Python 3.9+.
 
 ```bash
-python -m pip install pyinstaller pywin32
+python -m pip install -r requirements-build.txt
 python build.py
 ```
+
+> **Jangan jalankan `python -m build` di folder ini.** `build.py` ada di root,
+> dan `sys.path[0]` saat memakai `-m` adalah folder kerja — jadi
+> `python -m build` menjalankan `build.py` milik proyek ini, **bukan** tool
+> `build` dari PyPI. Menjalankan `python -m pip install build` lebih dulu tidak
+> menolong: folder kerja tetap diperiksa lebih dulu daripada site-packages.
+> Lagi pula ini bukan paket Python, jadi tidak ada yang perlu di-`build`.
 
 Hasilnya:
 
@@ -270,6 +277,8 @@ godex/
   app.py               CLI, wiring, self-test
   service.py           mode Windows service (pywin32)
 tests/test_smoke.py    smoke test end-to-end
+requirements-build.txt dependensi build + lint (dipakai CI)
+.github/workflows/     ci.yml (lint + smoke test + build .exe) dan release.yml
 ```
 
 Beberapa keputusan yang sengaja diambil — jangan "diperbaiki" tanpa alasan:

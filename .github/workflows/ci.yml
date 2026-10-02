@@ -1,0 +1,107 @@
+# CI untuk godex_bridge.
+#
+# Dua batasan yang membentuk seluruh desain file ini:
+#
+#   1. WAJIB Windows. godex/printing.py memanggil ctypes.WinDLL("winspool.drv"),
+#      dan tests/test_smoke.py memeriksa pesan WinError 10048/1801. Tidak ada
+#      bagian dari suite itu yang bisa lulus di Linux.
+#   2. PyInstaller tidak bisa cross-compile. .exe Windows hanya bisa dibangun
+#      di runner Windows.
+#
+# Soal kecepatan: build .exe butuh ~1-2 menit, sedangkan smoke test dari source
+# hanya ~30 detik. Karena itu PR hanya menjalankan job `test` (umpan balik
+# cepat), dan build .exe baru dikerjakan saat push ke main / manual.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Push berturut-turut ke ref yang sama membatalkan run sebelumnya, supaya runner
+# tidak dipakai untuk commit yang sudah usang.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint + smoke test
+    runs-on: windows-latest
+    # Suite ini memakai subprocess + socket; kalau ada yang menggantung, lebih
+    # baik gagal dalam 10 menit daripada menunggu batas default 6 jam.
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Dipin, bukan "3.x": versi floating bisa berubah tanpa perubahan kode
+          # dan mematahkan build PyInstaller begitu Python baru dirilis.
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Pasang dependensi
+        run: python -m pip install -r requirements-build.txt
+
+      - name: Lint
+        run: python -m pyflakes godex godex_bridge.py build.py tests
+
+      - name: Smoke test (dari source)
+        run: python tests/test_smoke.py
+
+  build-exe:
+    name: Build + uji .exe
+    needs: test
+    # PR tidak perlu membayar ongkos PyInstaller; regresi build tetap ketahuan
+    # saat push ke main, jauh sebelum hari rilis.
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Pasang dependensi
+        run: python -m pip install -r requirements-build.txt
+
+      # dist/ memang di-commit (lihat komentar di .gitignore), jadi .exe lama
+      # ikut ter-checkout. Tanpa langkah ini, .exe basi bisa terunggah sebagai
+      # artifact dan lolos seolah-olah hasil build baru.
+      - name: Buang .exe yang ter-commit
+        shell: bash
+        run: rm -f dist/godex_bridge.exe dist/Godex.ini
+
+      - name: Build .exe
+        run: python build.py
+
+      # Uji binary yang benar-benar akan dibagikan, bukan hanya source-nya.
+      - name: Smoke test (.exe hasil build)
+        env:
+          GODEX_TEST_BRIDGE: dist/godex_bridge.exe
+        run: python tests/test_smoke.py
+
+      - name: Unggah artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godex_bridge-exe
+          path: |
+            dist/godex_bridge.exe
+            dist/Godex.ini
+          # Kalau build tidak menghasilkan apa-apa, lebih baik gagal di sini
+          # daripada mengunggah artifact kosong.
+          if-no-files-found: error
+          retention-days: 14

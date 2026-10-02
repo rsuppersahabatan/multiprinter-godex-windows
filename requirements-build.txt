@@ -1,0 +1,14 @@
+# Dependensi untuk `python build.py` dan langkah lint di CI.
+#
+# File ini ada karena dua alasan:
+#   1. Versi minimum PyInstaller/pywin32 sebelumnya hanya disebut dalam prosa di
+#      readme.md, jadi CI tidak punya cara mengetahui apa yang harus dipasang.
+#   2. actions/setup-python butuh file dependensi sebagai kunci cache
+#      (`cache-dependency-path`). Tanpa file ini `cache: pip` gagal.
+#
+# pyflakes dipakai sebagai linter; `ruff` diblokir Application Control policy di
+# mesin dev, jadi jangan diganti tanpa alasan.
+
+pyinstaller>=6.6
+pywin32>=306
+pyflakes>=3.2

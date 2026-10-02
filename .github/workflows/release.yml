@@ -1,0 +1,104 @@
+# Rilis: bangun godex_bridge.exe, uji, lalu lampirkan ke GitHub Release.
+#
+# Kenapa tidak ada langkah PyPI di sini:
+#
+#   Proyek ini BUKAN paket Python. Yang dikirim ke mesin target adalah
+#   dist/godex_bridge.exe + dist/Godex.ini, hasil `python build.py`. Tidak ada
+#   yang `pip install` aplikasi ini. Jadi "publish" = lampirkan kedua file itu
+#   sebagai asset GitHub Release.
+#
+# Kenapa runner-nya Windows:
+#
+#   PyInstaller tidak bisa cross-compile, dan godex/printing.py memakai
+#   ctypes.WinDLL("winspool.drv"). Membangun .exe Windows di ubuntu tidak mungkin.
+#
+# Asset Release hanya boleh berasal dari binary yang sudah lulus smoke test,
+# karena itu build dan publish dipisah dan publish bergantung pada build.
+
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+# Rilis tidak boleh saling menimpa; jangan batalkan rilis yang sedang jalan.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build + uji .exe
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Pasang dependensi
+        run: python -m pip install -r requirements-build.txt
+
+      # dist/ di-commit, jadi .exe lama ikut ter-checkout. Buang dulu supaya
+      # yang diuji dan dilampirkan benar-benar hasil build rilis ini.
+      - name: Buang .exe yang ter-commit
+        shell: bash
+        run: rm -f dist/godex_bridge.exe dist/Godex.ini
+
+      - name: Build .exe
+        run: python build.py
+
+      - name: Smoke test (.exe hasil build)
+        env:
+          GODEX_TEST_BRIDGE: dist/godex_bridge.exe
+        run: python tests/test_smoke.py
+
+      # Opsional: bukti asal-usul binary (butuh repo publik, atau GHES).
+      # Job ini perlu `id-token: write` + `attestations: write` kalau diaktifkan.
+      #
+      # - name: Attest provenance
+      #   uses: actions/attest-build-provenance@v2
+      #   with:
+      #     subject-path: dist/godex_bridge.exe
+
+      - name: Unggah artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godex_bridge-release
+          path: |
+            dist/godex_bridge.exe
+            dist/Godex.ini
+          if-no-files-found: error
+
+  publish:
+    name: Lampirkan ke Release
+    needs: build
+    # Tidak menyentuh Windows sama sekali - cukup unduh artifact lalu unggah ke
+    # Release. Runner Linux lebih cepat disiapkan dan tidak memakai menit
+    # Windows yang lebih mahal.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # dibutuhkan `gh release upload`
+
+    steps:
+      - name: Ambil hasil build
+        uses: actions/download-artifact@v4
+        with:
+          name: godex_bridge-release
+          path: dist/
+
+      - name: Lampirkan asset ke Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "${{ github.event.release.tag_name }}"
+          dist/godex_bridge.exe dist/Godex.ini --clobber
