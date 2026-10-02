@@ -51,7 +51,10 @@ import sys
 
 # Paket `godex/` harus tetap ketemu walau script dijalankan dari cwd lain -
 # mis. oleh Service Control Manager yang cwd-nya C:\Windows\System32.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Kalau sudah dibungkus .exe, PyInstaller sendiri yang menaruh paketnya di
+# sys.path, dan __file__ menunjuk ke folder ekstraksi sementara.
+if not getattr(sys, "frozen", False):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from godex.app import main  # noqa: E402
 from godex.service import SERVICE_COMMANDS, SERVICE_MARKER, run_as_service  # noqa: E402

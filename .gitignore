@@ -1,1 +1,9 @@
 .workbuddy-ai
+
+# Artefak build — jangan di-commit.
+build/
+__pycache__/
+*.pyc
+
+# dist/ sengaja TIDAK diabaikan: isinya (godex_bridge.exe + Godex.ini) adalah
+# hasil yang dibagikan ke mesin target.
