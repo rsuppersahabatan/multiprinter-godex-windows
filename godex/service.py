@@ -19,6 +19,8 @@ import os
 import sys
 import threading
 
+from .paths import is_frozen
+
 SERVICE_NAME = os.environ.get("GODEX_SERVICE_NAME", "Godex")
 
 SERVICE_COMMANDS = frozenset(
@@ -54,6 +56,10 @@ def run_as_service(argv: list[str] | None = None) -> int:
         _svc_display_name_ = f"{SERVICE_NAME} Print Bridge"
         _svc_description_ = "TCP to Windows printer bridge (port Python dari Godex.exe)."
         _exe_args_ = SERVICE_MARKER
+        # Saat dijalankan sebagai .exe, sys.executable sudah exe-nya sendiri.
+        # Tanpa ini pywin32 menulis "python.exe script.py" ke ImagePath, padahal
+        # di mode frozen tidak ada script .py sama sekali.
+        _exe_name_ = sys.executable if is_frozen() else None
 
         def __init__(self, args):
             super().__init__(args)

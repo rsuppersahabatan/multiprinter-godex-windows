@@ -8,6 +8,10 @@ Selalu memakai --dry-run, jadi TIDAK ada yang benar-benar tercetak.
 
     python tests/test_smoke.py
 
+Menguji .exe hasil build (suite yang sama):
+
+    GODEX_TEST_BRIDGE=dist/godex_bridge.exe python tests/test_smoke.py
+
 Yang diuji:
   1. dua printer -> dua listener Prn, job masuk ke printer yang benar
   2. saklar enable per printer dan saklar utama
@@ -20,6 +24,7 @@ Yang diuji:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -31,6 +36,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BRIDGE = ROOT / "godex_bridge.py"
 PY = sys.executable
+
+#: Target yang diuji. Default: script. Bisa diarahkan ke .exe lewat env var.
+_OVERRIDE = os.environ.get("GODEX_TEST_BRIDGE")
+TARGET = Path(_OVERRIDE).resolve() if _OVERRIDE else BRIDGE
+
+
+def bridge_command(*args: str) -> list[str]:
+    """Perintah untuk menjalankan bridge — .exe langsung, atau lewat Python."""
+    if TARGET.suffix.lower() == ".exe":
+        return [str(TARGET), *args]
+    return [PY, str(TARGET), *args]
 
 PAYLOAD_A = b"^XA\n^FO50,50^FDprinter-1^FS\n^XZ\n"
 PAYLOAD_B = b"^XA\n^FO50,50^FDprinter-2^FS\n^XZ\n"
@@ -117,8 +133,9 @@ class Bridge:
         self.out.mkdir(parents=True, exist_ok=True)
         shutil.rmtree(self.logs, ignore_errors=True)
         self.logs.mkdir(parents=True, exist_ok=True)
-        args = [PY, str(BRIDGE), "-c", str(self.ini), "--dry-run", str(self.out),
-                "--log-dir", str(self.logs), "--no-console", *self.extra]
+        args = bridge_command("-c", str(self.ini), "--dry-run", str(self.out),
+                             "--log-dir", str(self.logs), "--no-console",
+                             *self.extra)
         self.proc = subprocess.Popen(args, cwd=str(ROOT), stdout=subprocess.PIPE,
                                      stderr=subprocess.STDOUT, text=True)
         return self
@@ -191,7 +208,7 @@ class Bridge:
 
 
 def run_cli(*extra: str, timeout: float = 90.0) -> subprocess.CompletedProcess:
-    return subprocess.run([PY, str(BRIDGE), *extra], cwd=str(ROOT),
+    return subprocess.run(bridge_command(*extra), cwd=str(ROOT),
                           capture_output=True, text=True, timeout=timeout)
 
 

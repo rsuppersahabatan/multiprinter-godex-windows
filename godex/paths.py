@@ -10,6 +10,7 @@ terpakai tanpa perubahan:
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 APP = "godex_bridge"
@@ -20,8 +21,27 @@ GODEX_DIR = ALLUSERSPROFILE / "Godex"
 DEFAULT_INI = GODEX_DIR / "Godex.ini"
 DEFAULT_LOG_DIR = GODEX_DIR / "Logs"
 
-# Godex.ini di sebelah paket ini (dua level di atas godex/paths.py).
-BUNDLED_INI = Path(__file__).resolve().parent.parent / "Godex.ini"
+
+def is_frozen() -> bool:
+    """True kalau dijalankan sebagai .exe hasil PyInstaller."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def app_dir() -> Path:
+    """Folder tempat aplikasi berada (bukan folder paket).
+
+    Saat dibungkus PyInstaller, ``__file__`` menunjuk ke folder ekstraksi
+    sementara (_MEIPASS) yang dibersihkan begitu proses keluar - jadi Godex.ini
+    di situ tidak ada gunanya. Yang benar: folder tempat .exe berada.
+    """
+    if is_frozen():
+        return Path(sys.executable).resolve().parent
+    # godex/paths.py -> naik dua level = root proyek
+    return Path(__file__).resolve().parent.parent
+
+
+#: Godex.ini yang ikut didistribusikan, di sebelah script / .exe.
+BUNDLED_INI = app_dir() / "Godex.ini"
 
 
 def resolve_ini(path: str | None) -> Path:
